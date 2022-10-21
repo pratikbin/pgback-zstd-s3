@@ -1,0 +1,92 @@
+version: "3"
+services:
+  pgback-zstd-s3:
+    image: assetmantle/pgback-zstd-s3
+    build: ../
+    container_name: pgback-zstd-s3
+    entrypoint: bash
+    command:
+    - -cx
+    - |
+      for ((i=0;i<5;i++)); do
+        /run.sh
+        sleep 5
+      done
+    depends_on: [s3, postgres]
+    environment:
+      # MODE: RESTORE
+      # RESTORE_PSQL_EXTRA_OPTS: "-1"
+      # RESTORE_VERSION: # empty will use latest
+      # SCHEDULE: '* * * * *'   # optional
+      # KEEP_LAST_BACKUPS: 2    # optional
+      DEBUG: true           # optional
+      BACKUP_ON_START: true   # optional
+      PGDUMP_EXTRA_OPTS: "--no-owner" # optional
+      S3_ENDPOINT: &s3-endpoint http://s3:9000
+      BACKUP_PREFIX: pg_backup_test_oneoff
+      # ZSTD_EXTRA_OPTS: # except -T(n) and -(compression ratio)
+      # ZSTD_COMPRESSION_LEVEL: # default 15
+      # ZSTD_COMPRESSION_THREADS: default to no of logical cores
+      # MC_GLOBAL_FLAGS: "--debug"
+      # MC_UPLOAD_FLAGS: --storage-class INTELLIGENT_TIERING
+      S3_ACCESS_KEY_ID: &s3-access-key postgres
+      S3_SECRET_ACCESS_KEY: &s3-secret-key postgres
+      S3_BUCKET: &s3-bucket postgres-backups
+      S3_PREFIX: &s3-prefix backup-test
+      POSTGRES_HOST: &dbhostname postgres
+      POSTGRES_DATABASE: &dbname postgres
+      POSTGRES_USER: &dbuser postgres
+      POSTGRES_PASSWORD: &dbpassword postgres
+
+  postgres-txs:
+    image: postgres:14
+    container_name: postgres-txs
+    entrypoint: [/bin/bash]
+    command:
+    - -cex
+    - |
+      pgbench "host=postgres user=$$POSTGRES_USER" -i
+      pgbench "host=postgres user=$$POSTGRES_USER" -t 1000 -j $$(nproc)
+    environment:
+      POSTGRES_USER: *dbuser
+      PGPASSWORD: *dbpassword
+
+  postgres:
+    image: postgres:14
+    restart: always
+    container_name: postgres
+    environment:
+      POSTGRES_USER: *dbuser
+      POSTGRES_DB: *dbname
+      POSTGRES_PASSWORD: *dbpassword
+
+  s3:
+    image: bitnami/minio
+    restart: always
+    container_name: s3
+    # ports:
+    #   - 9001:9001
+    environment:
+      MINIO_DEFAULT_BUCKETS: postgres-backups:policy,postgres-backups
+      MINIO_ROOT_USER: *s3-access-key
+      MINIO_ROOT_PASSWORD: *s3-secret-key
+
+  s3-client:
+    image: bitnami/minio
+    entrypoint: [/bin/bash]
+    command:
+    - -cx
+    - |
+      mc alias set "s3" $$S3_ENDPOINT $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD
+      if [[ -z $$(mc ls s3/$$S3_BUCKET/$$S3_PREFIX/) ]]; then
+        exit 2
+      else
+        exit 0
+      fi
+    container_name: s3-client
+    environment:
+      S3_ENDPOINT: *s3-endpoint
+      S3_BUCKET: *s3-bucket
+      S3_PREFIX: *s3-prefix
+      MINIO_ROOT_USER: *s3-access-key
+      MINIO_ROOT_PASSWORD: *s3-secret-key
