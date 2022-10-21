@@ -58,7 +58,7 @@ if [[ -z "${POSTGRES_USER}" ]]; then
 fi
 
 if [[ "${KEEP_LAST_BACKUPS}" -le 0 ]]; then
-  echo "[WARN] env KEEP_LAST_BACKUPS is not test, keeping all backups"
+  echo "[WARN] env KEEP_LAST_BACKUPS not found, keeping all backups"
 fi
 
 echo "[INFO] Using zstd compression level: ${ZSTD_COMPRESSION_LEVE:-15}"
