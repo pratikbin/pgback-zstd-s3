@@ -1,0 +1,6 @@
+.idea
+**.md
+**.txt
+.DS_STORE
+docker-compose.yaml
+.github
