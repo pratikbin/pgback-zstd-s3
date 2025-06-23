@@ -1,7 +1,7 @@
 version: "3"
 services:
   pgback-zstd-s3:
-    image: assetmantle/pgback-zstd-s3
+    image: nodeops/pgback-zstd-s3
     build: ../
     container_name: pgback-zstd-s3
     entrypoint: bash
