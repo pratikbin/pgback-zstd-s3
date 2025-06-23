@@ -34,8 +34,7 @@ function restore(){
     | psql \
       -h "${POSTGRES_HOST}" \
       -p "${POSTGRES_PORT}" \
-      -U "${POSTGRES_USER}" \
-      ${PGRESTORE_EXTRA_OPTS}
+      -U "${POSTGRES_USER}" ${PGRESTORE_EXTRA_OPTS}
   [[ "${PIPESTATUS[@]}" =~ "1" ]] && return # bash way of return true
   false # bash way of return false
 }

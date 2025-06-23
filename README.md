@@ -6,91 +6,130 @@
 
 </div>
 
-Postgres (14) s3 zstd streaming backup and restore
+PostgreSQL 16 S3 backup and restore with zstd compression streaming
 
 ## Features
 
-* Backup postgres(pgdump) to s3 with zstd compression on the fly to avoid disk space and IO
-  * Can override zstd compression level and compression threads
-  * Supports any s3 providers supported by [minio client mc](https://min.io/docs/minio/linux/reference/minio-mc.html), Tested on AWS s3 and minio
-  * Create one off backups
-* Keep only `X` backup
-* Restore latest or particular backup
+* Backup PostgreSQL (pg_dump) to S3 with zstd compression on the fly to avoid disk space and I/O
+  * Configurable zstd compression level and compression threads
+  * Supports any S3 providers supported by [minio client mc](https://min.io/docs/minio/linux/reference/minio-mc.html) - tested on AWS S3 and MinIO
+  * Create one-off backups or scheduled backups
+* Keep only the last `X` backups with automatic cleanup
+* Restore latest or specific backup
+* Retry mechanism for failed backups
 
-* Refer `docker-compose.yaml` to run in docker
-* Refer `k8s-cron.yaml` to run as kubernets cron
-* Refer `k8s-deployment.yaml` to run as kubernets deployment
+## Quick Start
 
-## Usage
+* Refer to `docker-compose.yaml` to run with Docker
+* Refer to `k8s-cron.yaml` to run as Kubernetes CronJob
+* Refer to `k8s-deployment.yaml` to run as Kubernetes Deployment
 
-`SCHEDULE`: [cron schdeule](https://pkg.go.dev/github.com/robfig/cron/v3), empty will run oneoff backup
+## Environment Variables
 
-`KEEP_LAST_BACKUPS`: keep specified no of last backups, required
+### Backup Configuration
 
-`DEBUG`: enable debug mode, `true` or `false`
+`SCHEDULE`: [Cron schedule](https://pkg.go.dev/github.com/robfig/cron/v3) for automated backups. Leave empty for one-off backup.
 
-`BACKUP_ON_START`: Create backup on start, `true` or `false`
+`KEEP_LAST_BACKUPS`: Number of recent backups to retain. Older backups will be automatically deleted. Set to 0 or leave empty to keep all backups.
 
-`BACKUP_PREFIX`: backup name prefix, empty will take dbname as prefix
+`BACKUP_ON_START`: Create a backup immediately on container start when using scheduled mode. Set to `true` or `false`.
 
-`PGDUMP_EXTRA_OPTS`: pgdump extra flags
+`BACKUP_PREFIX`: Prefix for backup filenames. Defaults to the database name if not specified.
 
-`S3_ENDPOINT`: S3 endpoint, for AWS s3 not needed, required
+### PostgreSQL Configuration
 
-`ZSTD_EXTRA_OPTS`: zstd backup extra args **except -T(n) and -(compression ratio)**
+`POSTGRES_HOST`: PostgreSQL server hostname (required)
 
-`ZSTD_COMPRESSION_LEVEL`: zstd compression level, default 15
+`POSTGRES_PORT`: PostgreSQL server port. Defaults to 5432 if not specified.
 
-`ZSTD_COMPRESSION_THREADS`: zstd compression and decompression threads, default to no of logical cores
+`POSTGRES_DATABASE`: Name of the database to backup (required)
 
-`MC_GLOBAL_FLAGS`: minio client global flags used while bakup and restore
+`POSTGRES_USER`: PostgreSQL username (required)
 
-`MC_UPLOAD_FLAGS`: minio client backup flags
+`POSTGRES_PASSWORD`: PostgreSQL password (required)
 
-`S3_ACCESS_KEY_ID`: S3 key id, required
+`PGDUMP_EXTRA_OPTS`: Additional flags to pass to pg_dump
 
-`S3_SECRET_ACCESS_KEY`: S3 Secret ke, required
+### S3 Configuration
 
-`S3_BUCKET`: S3 bucket name, required
+`S3_ACCESS_KEY_ID`: S3 access key ID (required)
 
-`S3_PREFIX`: S3 bucket path e.g. production-db, required
+`S3_SECRET_ACCESS_KEY`: S3 secret access key (required)
 
-`POSTGRES_HOST`: Postgres host, required
+`S3_BUCKET`: S3 bucket name (required)
 
-`POSTGRES_DATABASE`: Postgres DB name, required
+`S3_PREFIX`: S3 object prefix/path (e.g., "production-db", "backups/postgres")
 
-`POSTGRES_USER`: Postgres user, required
+`S3_ENDPOINT`: S3 endpoint URL. Not required for AWS S3, but needed for other S3-compatible services like MinIO.
 
-`POSTGRES_PASSWORD`: Postgres password, required
+### Compression Configuration
 
-> Backup object path will be something like
-> <S3_BUCKET>/<S3_PREFIX>/<BACKUP_PREFIX else POSTGRES_DATABASE>_<TIMESTEMP>
+`ZSTD_COMPRESSION_LEVEL`: Zstd compression level (1-22). Default is 15. Higher values provide better compression but use more CPU.
 
-## Restore
+`ZSTD_COMPRESSION_THREADS`: Number of threads for zstd compression/decompression. Defaults to the number of logical CPU cores.
 
-Default mode is backup
+`ZSTD_EXTRA_OPTS`: Additional zstd options (excluding `-T` and compression level which are handled separately)
 
-`MODE`: specify `RESTORE` or `restore` for run it on restore mode, default backup mode
+### MinIO Client Configuration
 
-`RESTORE_PSQL_EXTRA_OPTS`: Restore backup psql extra flags, default emtpy
+`MC_GLOBAL_FLAGS`: Global flags for the minio client used during backup and restore operations
 
-`RESTORE_VERSION`: specific restore version, empty will take latest backup, required in restore mode,
+`MC_UPLOAD_FLAGS`: Additional flags for minio client during backup uploads
 
-* Set `MODE` env as `RESTORE` / `restore` and run
+### Debug and Logging
+
+`DEBUG`: Enable debug mode with verbose output. Set to `true` to enable.
+
+## Restore Mode
+
+To restore a backup, set the mode to restore and configure the restore options:
+
+### Restore Configuration
+
+`MODE`: Set to `RESTORE` or `restore` to run in restore mode instead of backup mode
+
+`RESTORE_VERSION`: Specific backup filename to restore. Leave empty to restore the latest backup.
+
+`RESTORE_PSQL_EXTRA_OPTS`: Additional flags to pass to psql during restore
+
+### Example Restore Command
+
+```bash
+docker run --rm \
+  -e MODE=RESTORE \
+  -e RESTORE_VERSION=mydb_2024_01_15T10_30_00.zstd \
+  -e POSTGRES_HOST=localhost \
+  -e POSTGRES_DATABASE=mydb \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=password \
+  -e S3_ACCESS_KEY_ID=your-key \
+  -e S3_SECRET_ACCESS_KEY=your-secret \
+  -e S3_BUCKET=my-backup-bucket \
+  your-image:latest
+```
+
+## Backup Object Path
+
+Backup files are stored in S3 with the following path structure:
+```
+<S3_BUCKET>/<S3_PREFIX>/<BACKUP_PREFIX or POSTGRES_DATABASE>_<TIMESTAMP>.zstd
+```
+
+Example: `my-bucket/production-db/myapp_2024_01_15T10_30_00.zstd`
 
 ## Development
 
 ### Testing
 
-refer `tests` directory
+Refer to the `tests` directory for test cases and examples.
 
 <!--
 
 ## TODO
 
-- Add CI with triggers on package update, mc update etc
-- Non streaming backups
+- Add CI with triggers on package updates, mc updates etc
+- Non-streaming backups
 
 -->
 
-> Inspired from [eeshugerman/postgres-backup-s3](https://github.com/eeshugerman/postgres-backup-s3)
+> Inspired by [eeshugerman/postgres-backup-s3](https://github.com/eeshugerman/postgres-backup-s3)

@@ -1,4 +1,4 @@
-# testing
+# testing (outdated)
 
 Exectue `test.sh` here
 
