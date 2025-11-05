@@ -1,0 +1,17 @@
+services:
+  k8s-zstd-s3-backup:
+    image: reg.nodeops.xyz/k8s/manifest-backup:0.0.1
+    build: .
+    container_name: k8s-manifest-backup
+    volumes:
+      - $HOME/.kube/config:/root/.kube/config:ro
+      - ./src/run.sh:/run.sh
+      - ./src/backup.sh:/backup.sh
+    environment:
+      KEEP_LAST_BACKUPS: 120
+      DEBUG: true
+      CLUSTER_NAME: pratiktest
+      S3_BUCKET: nodeops-backup
+      S3_PREFIX: manifest-backups
+      S3_ACCESS_KEY_ID: xxx
+      S3_SECRET_ACCESS_KEY: xxx

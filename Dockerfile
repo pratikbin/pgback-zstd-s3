@@ -1,6 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM ubuntu:24.04
-
+FROM ubuntu
 SHELL [ "/bin/bash", "-cx" ]
 COPY --from=minio/mc /bin/mc /usr/local/bin/mc
 RUN <<EOF
