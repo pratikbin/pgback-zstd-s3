@@ -17,6 +17,7 @@ checkCommandExist mc
 checkCommandExist zstd
 checkCommandExist jq
 checkCommandExist kubectl
+checkCommandExist gpg
 
 if [[ -z "${S3_ACCESS_KEY_ID}" ]]; then
   echo "[ERROR] You need to set the S3_ACCESS_KEY_ID environment variable."

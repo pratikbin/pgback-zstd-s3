@@ -54,7 +54,20 @@ for ns in $namespaces; do
   done
 done
 
-tar -c -I 'zstd -15 -T0' -f - ../$TIMESTAMP | mc pipe ${MC_FLAGS[@]} ${MC_UPLOAD_FLAGS} "${S3_URI_BASE}"
+if [[ -f "${PASSPHRASE_FILE:-}" ]]; then
+  echo "[INFO] Encrypting stream with GPG (AES256) using passphrase file: ${PASSPHRASE_FILE}"
+  UPLOAD_SUFFIX=".gpg"
+  tar -c -I 'zstd -15 -T0' -f - ../$TIMESTAMP \
+  | gpg --symmetric --cipher-algo AES256 \
+        --batch --yes --pinentry-mode loopback \
+        --passphrase-file "${PASSPHRASE_FILE}" \
+        -o - \
+  | mc pipe ${MC_FLAGS[@]} ${MC_UPLOAD_FLAGS} "${S3_URI_BASE}${UPLOAD_SUFFIX}"
+else
+  echo "[INFO] PASSPHRASE_FILE not set; uploading unencrypted object"
+  tar -c -I 'zstd -15 -T0' -f - ../$TIMESTAMP \
+  | mc pipe ${MC_FLAGS[@]} ${MC_UPLOAD_FLAGS} "${S3_URI_BASE}"
+fi
 
 echo "[INFO] Backup complete"
 echo "[INFO] Backup stats"
