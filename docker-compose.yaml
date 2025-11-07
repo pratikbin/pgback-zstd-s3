@@ -1,6 +1,6 @@
 services:
   k8s-zstd-s3-backup:
-    image: reg.nodeops.xyz/k8s/manifest-backup:0.0.1
+    image: k8s/manifest-backup:0.0.1
     build: .
     container_name: k8s-manifest-backup
     volumes:
